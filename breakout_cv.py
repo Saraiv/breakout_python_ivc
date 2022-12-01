@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 
+bg = cv2.createBackgroundSubtractorMOG2()
+
 def cv_setup(game):
     cv_init(game)
     cv_update(game)
@@ -16,8 +18,9 @@ def cv_update(game):
         cap.open(-1)
     ret, image = cap.read()
     image = image[:, ::-1, :]
-    cv_process(game, image)
-    cv_output(image)
+    # cv_process(game, image)
+    cv_process_second(game, image)
+    # cv_output(image)
     game.after(1, cv_update, game)
 
 
@@ -47,6 +50,39 @@ def cv_process(game, image):
         game.paddle.move(-10)
     elif right > left:
         game.paddle.move(10)
+
+def cv_process_second(game, image):
+    bg_frame = bg.apply(image)
+    image_cpy = image.copy()
+
+    ret, thresh = cv2.threshold(bg_frame, 127, 255, 0)
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    biggestArea = 0
+    cx = 0
+    biggestContour = None
+
+    if len(contours) != 0:
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            if 500 < area < 15000:
+                M = cv2.moments(contour)
+                cx = int(M['m10'] / M['m00'])
+                if area > biggestArea:
+                    biggestArea = area
+                    biggestContour = contour
+                x, y, w, h = cv2.boundingRect(biggestContour)
+                cv2.rectangle(image_cpy, (x, y), (x + w, y + h), (0, 255, 0), 3)
+
+    cv2.imshow("windowbg", bg_frame)
+    cv_output(image_cpy)
+
+    if cx > 300:
+        game.paddle.move(10)
+    elif cx < 300:
+        game.paddle.move(-10)
+    else:
+        game.paddle.move(0)
 
 def cv_output(image):
     cv2.imshow("Image", image)
